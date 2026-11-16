@@ -17,6 +17,8 @@ export function createPlayer() {
     maxHp: PLAYER_BASE.hp,
     aim: -Math.PI / 2,
     fireCooldown: 0,
+    muzzleTime: 0, // seconds since the cannon last spoke; render flashes on it
+    muzzleHold: false, // screenshot staging pins the flash on
     dashCooldown: 0,
     dashTime: 0,
     dashDir: { x: 1, y: 0 },
@@ -78,6 +80,8 @@ export function burst(particles, x, y, color, count, speed, life, size) {
       size: size * (0.6 + Math.random() * 0.8),
       color,
       drag: 3.2,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 7,
     });
   }
 }
@@ -135,6 +139,7 @@ export function updatePlayer(p, input, dt) {
 
   p.aim = Math.atan2(input.mouse.y - p.y, input.mouse.x - p.x);
   p.fireCooldown = Math.max(0, p.fireCooldown - dt);
+  p.muzzleTime = Math.max(0, p.muzzleTime - dt);
   p.dashCooldown = Math.max(0, p.dashCooldown - dt);
   p.invulnTime = Math.max(0, p.invulnTime - dt);
   p.engineGlow = Math.hypot(p.vx, p.vy) / p.stats.dashSpeed;
@@ -229,6 +234,7 @@ export function updateParticles(particles, dt) {
     pt.vy *= drag;
     pt.x += pt.vx * dt;
     pt.y += pt.vy * dt;
+    pt.rot += pt.vr * dt;
   }
 }
 

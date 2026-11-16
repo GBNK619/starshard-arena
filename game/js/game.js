@@ -30,7 +30,7 @@ import {
 } from './entities.js';
 import { WaveDirector, pickUpgrades } from './waves.js';
 import { UPGRADE_POOL } from './waves.js';
-import { createStarfield, drawScene } from './render.js';
+import { createBackdrop, createStarfield, drawScene } from './render.js';
 
 const BEST_KEY = 'starshard-arena-best';
 
@@ -48,6 +48,8 @@ class Game {
     this.timeScale = 1;
 
     this.stars = createStarfield(this.rng);
+    this.backdrop = createBackdrop(this.rng);
+    this.ambient = false; // screenshot staging fills the title with a live scene
     this.state = 'title';
     this.paused = false;
     this.time = 0;
@@ -144,11 +146,12 @@ class Game {
   stageShot(shot) {
     if (shot === 'title') {
       this.best = Math.max(this.best, 1250);
+      this.stageTitleScene();
       return;
     }
     this.startRun();
     if (shot === 'play') {
-      this.timeScale = 0.35; // hold the composition a moment for the camera
+      this.timeScale = 0.25; // hold the composition a moment for the camera
       this.wave = 3;
       this.director.queue = [];
       this.enemies = [];
@@ -157,7 +160,6 @@ class Game {
       this.player.hp = 4;
       this.player.x = 430;
       this.player.y = 400;
-      this.player.dashCooldown = 0.9;
       this.input.mouse.x = 770;
       this.input.mouse.y = 235;
       this.player.aim = Math.atan2(
@@ -165,28 +167,69 @@ class Game {
         this.input.mouse.x - this.player.x,
       );
       this.bannerTime = 0;
-      const place = (kind, x, y) => this.enemies.push(spawnEnemy(kind, x, y, this.rng, 1.06));
+      // Caught mid-dash, cannon hot: ghosts trail the ship, the muzzle
+      // flash is pinned on, and the dash bar sits part-charged.
+      const p = this.player;
+      p.dashDir = { x: Math.cos(p.aim), y: Math.sin(p.aim) };
+      p.dashTime = 0.12;
+      p.dashCooldown = 1.1;
+      p.muzzleHold = true;
+      p.ghosts = [0.26, 0.2, 0.14].map((life, i) => ({
+        x: p.x - p.dashDir.x * 30 * (i + 1),
+        y: p.y - p.dashDir.y * 30 * (i + 1),
+        aim: p.aim,
+        life,
+      }));
+      const place = (kind, x, y, hp) => {
+        const e = spawnEnemy(kind, x, y, this.rng, 1.06);
+        if (hp !== undefined) e.hp = hp;
+        this.enemies.push(e);
+        return e;
+      };
+      // Eleven hostiles, every kind on the field, two already scarred.
       place('chaser', 705, 225);
-      place('chaser', 765, 430);
+      place('chaser', 770, 430);
+      place('chaser', 240, 545);
       place('dart', 645, 565);
+      place('dart', 555, 150);
       place('orbiter', 295, 215);
-      place('splitter', 825, 305);
+      place('orbiter', 862, 592);
+      place('splitter', 825, 305, 4);
       place('mini', 660, 320);
-      for (let i = 0; i < 3; i++) {
-        const d = 44 + i * 52;
-        const b = createBullet(
-          this.player.x + Math.cos(this.player.aim) * d,
-          this.player.y + Math.sin(this.player.aim) * d,
-          this.player.aim,
-          this.player.stats,
-        );
-        this.bullets.push(b);
+      place('mini', 610, 262);
+      place('brute', 128, 138, 13);
+      // A stream of fire down the aim line, plus a fanned pair.
+      for (let i = 0; i < 6; i++) {
+        const d = 46 + i * 37;
+        this.bullets.push(createBullet(
+          p.x + Math.cos(p.aim) * d,
+          p.y + Math.sin(p.aim) * d,
+          p.aim,
+          p.stats,
+        ));
+      }
+      for (const off of [-0.085, 0.085]) {
+        const d = 40;
+        this.bullets.push(createBullet(
+          p.x + Math.cos(p.aim + off) * d,
+          p.y + Math.sin(p.aim + off) * d,
+          p.aim + off,
+          p.stats,
+        ));
       }
       spawnPickup(this.pickups, 'shard', 520, 300, this.rng);
       spawnPickup(this.pickups, 'shard', 565, 520, this.rng);
       spawnPickup(this.pickups, 'shard', 755, 620, this.rng);
+      spawnPickup(this.pickups, 'shard', 350, 625, this.rng);
       spawnPickup(this.pickups, 'heart', 205, 560, this.rng);
+      // Impacts in progress: the target chaser is bursting, the splitter
+      // is shedding sparks, and a shard has just been scooped up.
       burst(this.particles, 700, 228, PALETTE.chaser, 14, 190, 0.6, 4);
+      burst(this.particles, 712, 222, '#ffffff', 8, 160, 0.35, 3);
+      burst(this.particles, 825, 305, PALETTE.splitter, 10, 170, 0.5, 3.5);
+      burst(this.particles, 520, 300, PALETTE.shard, 8, 130, 0.45, 3);
+      spawnFloatText(this.texts, 520, 282, `+${SHARD_SCORE}`);
+      spawnFloatText(this.texts, 565, 502, `+${SHARD_SCORE}`);
     } else if (shot === 'upgrade') {
       this.wave = 3;
       this.director.queue = [];
@@ -197,6 +240,14 @@ class Game {
       const byId = (id) => UPGRADE_POOL.find((u) => u.id === id);
       this.choices = [byId('multishot'), byId('damage'), byId('vitality')];
       this.bannerTime = 0;
+      // The pointer rests on the middle card, so one card shows its
+      // hover state, and loose shards glint behind the panel.
+      this.input.mouse.x = 480;
+      this.input.mouse.y = 380;
+      spawnPickup(this.pickups, 'shard', 118, 118, this.rng);
+      spawnPickup(this.pickups, 'shard', 852, 138, this.rng);
+      spawnPickup(this.pickups, 'shard', 138, 622, this.rng);
+      spawnPickup(this.pickups, 'shard', 842, 606, this.rng);
       this.state = 'upgrade';
     } else if (shot === 'end') {
       this.wave = 7;
@@ -207,8 +258,62 @@ class Game {
       this.shardsCollected = 53;
       this.best = Math.max(this.best, 580);
       this.bannerTime = 0;
+      // The victors circle the wreck, and the shards the ship died
+      // chasing lie scattered where they fell.
+      const place = (kind, x, y) => this.enemies.push(spawnEnemy(kind, x, y, this.rng, 1));
+      place('chaser', 150, 168);
+      place('orbiter', 806, 158);
+      place('dart', 848, 548);
+      place('brute', 118, 556);
+      spawnPickup(this.pickups, 'shard', 212, 306, this.rng);
+      spawnPickup(this.pickups, 'shard', 738, 336, this.rng);
+      spawnPickup(this.pickups, 'shard', 522, 556, this.rng);
+      spawnPickup(this.pickups, 'shard', 384, 604, this.rng);
+      spawnPickup(this.pickups, 'shard', 706, 516, this.rng);
       this.state = 'gameover';
     }
+  }
+
+  // The title's backdrop diorama: the hero ship holding a lane of fire
+  // against a ring of hostiles, frozen mid-battle behind the logo.
+  stageTitleScene() {
+    this.ambient = true;
+    const p = this.player;
+    p.x = 248;
+    p.y = 598;
+    p.baseAim = Math.atan2(250 - p.y, 700 - p.x);
+    p.aim = p.baseAim;
+    p.engineGlow = 0.55;
+    p.muzzleHold = true;
+    const place = (kind, x, y) => {
+      const e = spawnEnemy(kind, x, y, this.rng, 1);
+      e.baseY = y;
+      e.phase = e.t;
+      this.enemies.push(e);
+      return e;
+    };
+    place('brute', 802, 168);
+    place('orbiter', 162, 182);
+    place('chaser', 884, 430);
+    place('splitter', 138, 472);
+    place('dart', 642, 118);
+    place('mini', 758, 348);
+    for (let i = 0; i < 5; i++) {
+      const d = 48 + i * 44;
+      this.bullets.push(createBullet(
+        p.x + Math.cos(p.baseAim) * d,
+        p.y + Math.sin(p.baseAim) * d,
+        p.baseAim,
+        p.stats,
+      ));
+    }
+    spawnPickup(this.pickups, 'shard', 368, 646, this.rng);
+    spawnPickup(this.pickups, 'shard', 612, 560, this.rng);
+    burst(this.particles, 884, 430, PALETTE.chaser, 12, 180, 1.8, 4);
+    spawnFloatText(this.texts, 612, 600, `+${SHARD_SCORE}`);
+    const t = this.texts[this.texts.length - 1];
+    t.life = 99; // the camera lingers; the score pop should too
+    t.maxLife = 99;
   }
 
   // --- per-frame update --------------------------------------------------
@@ -224,6 +329,7 @@ class Game {
     if (this.input.pressed('KeyM')) this.audio.setMuted(!this.audio.muted);
 
     if (this.state === 'title') {
+      if (this.ambient) this.updateAmbient(rawDt);
       if (this.input.clicked || this.input.pressed('Enter') || this.input.pressed('Space')) {
         this.audio.unlock();
         this.startRun();
@@ -275,11 +381,40 @@ class Game {
     }
   }
 
+  // The title's staged battlefield, kept gently alive behind the logo:
+  // enemies bob and spin, the bullet stream recycles, the hero ship's
+  // aim sweeps a slow arc. Nothing collides; it is a diorama.
+  updateAmbient(dt) {
+    const p = this.player;
+    for (const e of this.enemies) {
+      e.t += dt;
+      if (e.baseY !== undefined) {
+        e.y = e.baseY + Math.sin(this.time * 0.7 + e.phase) * 9;
+      }
+    }
+    for (const b of this.bullets) {
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      const strayed =
+        b.x < -30 || b.x > VIEW.width + 30 || b.y < -30 || b.y > VIEW.height + 30 ||
+        Math.hypot(b.x - p.x, b.y - p.y) > 420; // keep the stream a comet, not a crossing
+      if (strayed) {
+        const a = Math.atan2(b.vy, b.vx);
+        b.x = p.x + Math.cos(a) * (p.r + 10);
+        b.y = p.y + Math.sin(a) * (p.r + 10);
+      }
+    }
+    if (p.baseAim !== undefined) {
+      p.aim = p.baseAim + Math.sin(this.time * 0.45) * 0.14;
+    }
+  }
+
   updateGhosts(dt) {
     const p = this.player;
     if (p.dashTime > 0) {
       if (p.ghosts.length === 0) this.audio.dash(); // once per dash, not per frame
       p.ghosts.push({ x: p.x, y: p.y, aim: p.aim, life: 0.28 });
+      burst(this.particles, p.x, p.y, PALETTE.player, 1, 46, 0.32, 3);
     }
     for (let i = p.ghosts.length - 1; i >= 0; i--) {
       p.ghosts[i].life -= dt;
@@ -299,6 +434,7 @@ class Game {
       const b = createBullet(p.x + Math.cos(p.aim) * (p.r + 6), p.y + Math.sin(p.aim) * (p.r + 6), angle, p.stats);
       this.bullets.push(b);
     }
+    p.muzzleTime = 0.055;
     burst(this.particles, p.x + Math.cos(p.aim) * (p.r + 10), p.y + Math.sin(p.aim) * (p.r + 10), PALETTE.bullet, 2, 90, 0.16, 3);
     this.audio.shoot();
   }
