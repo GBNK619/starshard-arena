@@ -8,10 +8,21 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
+
+// Counts regular files under a directory, for the delivery report below.
+function countFiles(dir: string): number {
+  let n = 0;
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) n += countFiles(p);
+    else n += 1;
+  }
+  return n;
+}
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
@@ -37,4 +48,11 @@ writeFileSync(
     game_max_bytes: 50331648,
     game_path_max_bytes: 1000,
   }),
+);
+
+// A one-line delivery report, so a local run shows at a glance that the
+// whole game and every screenshot landed in the output directory.
+console.log(
+  `starshard-arena: delivered ${countFiles(join(out, 'game'))} game files and ` +
+    `${countFiles(join(out, 'screenshots'))} screenshots to ${out}`,
 );

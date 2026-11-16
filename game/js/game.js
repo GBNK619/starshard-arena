@@ -202,6 +202,7 @@ class Game {
       this.wave = 7;
       this.director.queue = [];
       this.enemies = [];
+      this.player.hp = 0; // the hull pips behind the end screen should read empty
       this.score = 580;
       this.shardsCollected = 53;
       this.best = Math.max(this.best, 580);
