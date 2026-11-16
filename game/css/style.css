@@ -1,0 +1,32 @@
+/* Starshard Arena — the page around the canvas: a dark void, the canvas
+   centred and scaled to the window with its 4:3 shape kept. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #05050f;
+  overflow: hidden;
+}
+
+.stage {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, #0d0d24 0%, #05050f 75%);
+}
+
+canvas#game {
+  width: min(100vw, calc(100vh * 4 / 3));
+  height: auto;
+  aspect-ratio: 4 / 3;
+  display: block;
+  background: #070714;
+  box-shadow: 0 0 60px rgba(60, 90, 255, 0.25);
+  cursor: crosshair;
+}
