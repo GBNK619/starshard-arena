@@ -2,6 +2,7 @@
 
 [![make.fun · best-game-01](https://make.fun/badge/best-game-01.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
 [![rank](https://make.fun/badge/best-game-01/GBNK619/starshard-arena/rank.svg)](https://make.fun/bounty/best-game-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
+[![reward](https://make.fun/badge/best-game-01/GBNK619/starshard-arena/reward.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
 
 Starshard Arena is a top-down arena survival shooter that runs entirely in the
 browser. The void has shattered into starshards, and every neon husk drifting
